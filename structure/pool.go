@@ -118,9 +118,9 @@ func MakePool(shard uint) Pool {
 		IntList:           make([]InternalTransaction, 0),
 		CroList:           make([]CrossShardTransaction, 0),
 		ReList:            make([]SuperTransaction, 0),
-		InternalChannel:   make(chan InternalTransaction, 100000),
-		CrossShardChannel: make(chan CrossShardTransaction, 100000),
-		RelayChannel:      make(chan SuperTransaction, 100000),
+		InternalChannel:   make(chan InternalTransaction, 1000000),
+		CrossShardChannel: make(chan CrossShardTransaction, 1000000),
+		RelayChannel:      make(chan SuperTransaction, 1000000),
 	}
 	return pool
 }

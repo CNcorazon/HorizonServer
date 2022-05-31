@@ -1,8 +1,6 @@
 package model
 
-import (
-	"server/structure"
-)
+import "server/structure"
 
 type (
 	BlockTransactionRequest struct {

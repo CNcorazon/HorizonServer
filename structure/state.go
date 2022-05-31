@@ -1,6 +1,8 @@
 package structure
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"math"
@@ -11,7 +13,8 @@ import (
 
 type (
 	State struct {
-		RootsVote     map[uint]map[string]int //记录各个分片新状态的投票数
+		NewRootsVote  map[uint]map[string]int //记录各个分片新状态的投票数
+		RootsVote     map[uint]map[string]int //收到足够多投票的树根
 		NewAccountMap map[uint]map[string]*Account
 		AccountMap    map[uint]map[string]*Account
 	}
@@ -31,7 +34,8 @@ func (s *State) CalculateRoot() string {
 		log.Fatalln("计算账户状态Root失败")
 	}
 	// return sha256.Sum256(jsonString)
-	return string(jsonString)
+	byte32 := sha256.Sum256(jsonString)
+	return hex.EncodeToString(byte32[:])
 }
 
 //往全局状态中添加账户
@@ -57,7 +61,7 @@ func UpdateChain(tranblocks TransactionBlock, height uint, s *State) {
 	s.NewAccountMap = s.AccountMap
 	for shardNum, tran := range tranblocks.SuperList {
 		//处理接力交易
-		logger.AnalysisLogger.Printf("位置%v,交易%v", shardNum, tran)
+		// logger.AnalysisLogger.Printf("位置%v,交易%v", shardNum, tran)
 		for _, tx := range tran {
 			ExcuteRelay(tx, s, int(shardNum))
 		}
@@ -206,11 +210,13 @@ func GenerateAddressList(n int) []string {
 func InitState(n int, shardNum int) *State {
 	state := State{
 		// Shard:      s,
+		NewRootsVote:  make(map[uint]map[string]int),
 		RootsVote:     make(map[uint]map[string]int),
 		NewAccountMap: make(map[uint]map[string]*Account),
 		AccountMap:    make(map[uint]map[string]*Account),
 	}
 	for i := 1; i <= shardNum; i++ {
+		state.NewRootsVote[uint(i)] = make(map[string]int)
 		state.RootsVote[uint(i)] = make(map[string]int)
 	}
 	accountList := InitAccountList(shardNum, n)
@@ -260,14 +266,20 @@ func VerifyGSRoot(vote map[uint]map[string]int, s *State) {
 	MinVote := math.Max(1, math.Floor(2*CLIENT_MAX/3))
 	isValid := false
 	for i := 1; i <= ShardNum; i++ {
+		logger.AnalysisLogger.Printf("分片%v中收到的树根结果为%v", i, vote[uint(i)])
+		logger.AnalysisLogger.Printf("分片%v的Rootsvote为%v", i, s.RootsVote[uint(i)])
+		logger.AnalysisLogger.Printf("分片%v的NewRootsvote为%v", i, s.NewRootsVote[uint(i)])
 		for _, votes := range vote[uint(i)] {
 			if votes >= int(MinVote) {
-				logger.AnalysisLogger.Printf("树根验证成功")
 				isValid = true
 			}
 		}
 		if isValid {
+			logger.AnalysisLogger.Printf("树根验证成功")
 			s.AccountMap[uint(i)] = s.NewAccountMap[uint(i)]
+		} else {
+			logger.AnalysisLogger.Printf("树根验证失败")
 		}
+		isValid = false
 	}
 }

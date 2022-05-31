@@ -1,6 +1,8 @@
 package structure
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,15 +34,15 @@ type (
 		Body   BlockBody
 	}
 
-	Root string
+	// Root string
 
 	BlockHeader struct {
 		// Shard                uint   //表示是第几号分片中的区块
 		Height               uint   //当前区块的高度
 		Time                 int64  //区块产生的时候的Unix时间戳
 		Vote                 uint   //本区块收到的移动节点的票数
-		TransactionRoot      Root   //修改了本分片状态的交易区块的SHA256值
-		SuperTransactionRoot Root   //产生的超级交易区块的SHA256值
+		TransactionRoot      string //修改了本分片状态的交易区块的SHA256值
+		SuperTransactionRoot string //产生的超级交易区块的SHA256值
 		StateRoot            GSRoot //当前执行完本交易之后，当前区块链账本的世界状态 //应该是前一个时间的状态！
 	}
 
@@ -84,7 +86,8 @@ func (r *TransactionBlock) CalculateRoot() string {
 	if err != nil {
 		log.Fatalln("计算交易区块Root失败")
 	}
-	return string(jsonString)
+	byte32 := sha256.Sum256(jsonString)
+	return hex.EncodeToString(byte32[:])
 }
 
 // func MakeTransactionBlock(IntTraList map[uint][]InternalTransaction, CroList map[uint][]CrossShardTransaction, SuList map[uint][]SuperTransaction) TransactionBlock {
@@ -164,7 +167,7 @@ func (a *HorizonBlockChain) AppendBlock(b Block) {
 	num := intNum + croNum + supNum
 
 	logger.BlockLogger.Printf("添加区块成功, 该区块获得了%v张投票,该区块包含的交易数为%v:{%v,%v,%v}, 当前的区块高度是%v,当前的时间是 %v\n", b.Header.Vote, num, intNum, croNum, supNum, a.Height, time.Now().UnixMicro())
-	logger.AnalysisLogger.Printf("%v %v{%v,%v,%v} ", b.Header.Height, num, intNum, croNum, supNum)
+	// logger.AnalysisLogger.Printf("%v %v{%v,%v,%v} ", b.Header.Height, num, intNum, croNum, supNum)
 	//return &SuperBlock
 }
 

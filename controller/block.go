@@ -54,7 +54,7 @@ func PackTransaction(c *gin.Context) {
 			ReList[uint(i)] = append(ReList[uint(i)], Re...)
 			Num = Num + num
 		}
-		logger.AnalysisLogger.Printf("移动节点下载了%v条交易", Num)
+		// logger.AnalysisLogger.Printf("移动节点下载了%v条交易", Num)
 
 		// 	Num = 50
 		// 	croRate := 1.0 //跨分片交易占据总交易的1/croRate
@@ -122,7 +122,7 @@ func PackAccount(c *gin.Context) {
 		StateRoot: structure.Source.ChainShard[0].AccountState.CalculateRoot(),
 		Vote:      structure.Source.ChainShard[0].AccountState.RootsVote,
 	}
-
+	logger.AnalysisLogger.Printf("来自分片%v的gsroot请求,此时rootsvote为:%v", shard, structure.Source.ChainShard[0].AccountState.RootsVote)
 	height := structure.Source.ChainShard[0].GetHeight()
 
 	res := model.BlockAccountResponse{
@@ -177,6 +177,7 @@ func AppendBlock(c *gin.Context) {
 		//添加区块
 		logger.ShardLogger.Printf("共识分片共识区块%v添加成功，将交易区块放入执行区块的交易池中", data.Block.Header.Height)
 		structure.Source.ChainShard[0].AppendBlock(data.Block)
+		logger.AnalysisLogger.Printf("共识分片共识区块%v添加成功，将交易区块放入执行区块的交易池中", data.Block.Header.Height)
 		for i := 1; i < len(data.Block.Body.Transaction.InternalList); i++ {
 			for _, tran := range data.Block.Body.Transaction.InternalList[uint(i)] {
 				structure.Source.PoolMap[uint(2)][uint(i)].InternalChannel <- tran
@@ -201,22 +202,26 @@ func AppendBlock(c *gin.Context) {
 		}
 	}
 
-	var CommunicationMap map[uint]map[string]*structure.Client
-	if structure.Source.CommunicationMap[0] != nil {
-		CommunicationMap = structure.Source.CommunicationMap
-	} else {
-		CommunicationMap = structure.Source.CommunicationMap_temp
-	}
+	// var CommunicationMap map[uint]map[string]*structure.Client
+	// if structure.Source.CommunicationMap[0] != nil {
+	// 	CommunicationMap = structure.Source.CommunicationMap
+	// } else {
+	// 	CommunicationMap = structure.Source.CommunicationMap_temp
+	// }
 	//将共识分片中的客户端全部关掉
-	for _, value := range CommunicationMap[uint(0)] {
+	for _, value := range structure.Source.Consensus_CommunicationMap[uint(0)] {
 		value.Socket.Close()
 	}
 	// CommunicationMap[uint(0)] = nil
 	//开始重分片
+
 	for i := 1; i <= structure.ShardNum; i++ {
 		structure.Source.NodeNum[uint(i)] = 0
+		// structure.Source.Consensus_CommunicationMap[uint(i)] = nil
 	}
-
+	for i := 0; i <= structure.ShardNum; i++ {
+		structure.Source.Consensus_CommunicationMap[uint(i)] = nil
+	}
 	//将Winner清空
 	structure.Source.Winner[uint(0)] = ""
 	logger.ShardLogger.Printf("重新开始筛选节点,清空上一分片节点相关信息")
@@ -284,8 +289,8 @@ func WitnessTx(c *gin.Context) {
 				structure.Source.PoolMap[uint(1)][uint(i)].AppendRelayTransaction(trans)
 			}
 		}
-		logger.AnalysisLogger.Printf("见证成功%v条交易", Num)
-		structure.Source.WitnessCount = -10000 //保证后面提交的交易不被重复记录
+		// logger.AnalysisLogger.Printf("见证成功%v条交易", Num)
+		structure.Source.WitnessCount = -100000 //保证后面提交的交易不被重复记录
 	}
 
 	structure.Source.Lock.Unlock()
@@ -349,18 +354,18 @@ func CollectRoot(c *gin.Context) {
 
 	structure.Source.Lock.Lock()
 
-	structure.Source.ChainShard[uint(0)].AccountState.RootsVote[shard][root] += 1
-
+	structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard][root] += 1
+	logger.AnalysisLogger.Printf("收到来自shard%v的树根,该分片的树根以及票数情况为:votes%v", shard, structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard])
 	var CommunicationMap map[uint]map[string]*structure.Client
 	isEmpty := true
 	isEnd := true
-	if structure.Source.CommunicationMap[shard][id] != nil {
-		CommunicationMap = structure.Source.CommunicationMap
-	} else {
-		CommunicationMap = structure.Source.CommunicationMap_temp
-	}
+	// if structure.Source.CommunicationMap[shard][id] != nil {
+	CommunicationMap = structure.Source.Validation_CommunicationMap
+	// } else {
+	// 	CommunicationMap = structure.Source.CommunicationMap_temp
+	// }
 
-	logger.AnalysisLogger.Printf("collectroot:%v,%v,%v", CommunicationMap, shard, id)
+	// logger.AnalysisLogger.Printf("collectroot:%v,%v,%v", CommunicationMap, shard, id)
 	CommunicationMap[shard][id].Socket.Close()
 	CommunicationMap[shard][id] = nil
 	for _, client := range CommunicationMap[shard] {
@@ -380,8 +385,13 @@ func CollectRoot(c *gin.Context) {
 		}
 	}
 	if isEnd {
+		for j := 1; j <= structure.ShardNum; j++ {
+			CommunicationMap[uint(j)] = structure.Source.Consensus_CommunicationMap[uint(j)]
+			structure.Source.ChainShard[uint(0)].AccountState.RootsVote[uint(j)] = structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[uint(j)]
+			structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[uint(j)] = make(map[string]int)
+		}
 		structure.Source.WitnessCount = 0
-		CommunicationMap[0] = nil
+
 	}
 
 	structure.Source.Lock.Unlock()

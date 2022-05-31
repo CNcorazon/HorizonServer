@@ -21,6 +21,7 @@ func AssignShardNum(c *gin.Context) {
 	num := 0 //如果发送的时候为0说明执行分片已经有了足够多的节点
 	// shardList := make([]uint, structure.ShardNum) //候选Shard
 	// var tranNum []int    //交易数目
+	// logger.AnalysisLogger.Printf("%v", structure.Source.NodeNum)
 
 	for i := 1; i <= int(structure.Source.Shard); i++ {
 		if structure.Source.NodeNum[uint(i)] == structure.CLIENT_MAX {
@@ -97,34 +98,38 @@ func RegisterCommunication(c *gin.Context) {
 		Random: random,
 	}
 
-	var CommunicationMap map[uint]map[string]*structure.Client
-	if len(structure.Source.CommunicationMap[uint(0)]) == structure.ShardNum {
-		CommunicationMap = structure.Source.CommunicationMap_temp
-	} else if len(structure.Source.CommunicationMap_temp[uint(0)]) == structure.ShardNum {
-		CommunicationMap = structure.Source.CommunicationMap
-	} else if len(structure.Source.CommunicationMap_temp[uint(0)]) == 0 {
-		CommunicationMap = structure.Source.CommunicationMap
-	} else {
-		CommunicationMap = structure.Source.CommunicationMap_temp
+	// logger.AnalysisLogger.Printf("consensus_map:%v", structure.Source.Consensus_CommunicationMap)
+	// logger.AnalysisLogger.Printf("validation_map:%v", structure.Source.Validation_CommunicationMap)
+
+	Consensus_Map := structure.Source.Consensus_CommunicationMap
+	Validation_Map := structure.Source.Validation_CommunicationMap
+	// if len(structure.Source.CommunicationMap[uint(0)]) == structure.ShardNum {
+	// 	CommunicationMap = structure.Source.CommunicationMap_temp
+	// } else if len(structure.Source.CommunicationMap_temp[uint(0)]) == structure.ShardNum {
+	// 	CommunicationMap = structure.Source.CommunicationMap
+	// } else if len(structure.Source.CommunicationMap_temp[uint(0)]) == 0 {
+	// 	CommunicationMap = structure.Source.CommunicationMap
+	// } else {
+	// 	CommunicationMap = structure.Source.CommunicationMap_temp
+	// }
+
+	if Consensus_Map[uint(shardnum)] == nil {
+		Consensus_Map[uint(shardnum)] = make(map[string]*structure.Client)
 	}
 
-	if CommunicationMap[uint(shardnum)] == nil {
-		CommunicationMap[uint(shardnum)] = make(map[string]*structure.Client)
-	}
-
-	CommunicationMap[uint(shardnum)][client.Id] = client
-	logger.ShardLogger.Printf("分片%v添加一个新的移动节点,当前分片的移动节点数为%v", shardnum, len(CommunicationMap[uint(shardnum)]))
+	Consensus_Map[uint(shardnum)][client.Id] = client
+	logger.ShardLogger.Printf("分片%v添加一个新的移动节点,当前分片的移动节点数为%v", shardnum, len(Consensus_Map[uint(shardnum)]))
 
 	//如果该执行分片达到了足够多的移动节点数目,从该执行分片中选出胜者加入共识分片，shard[0]
 
-	if len(CommunicationMap[uint(shardnum)]) == structure.CLIENT_MAX {
+	if len(Consensus_Map[uint(shardnum)]) == structure.CLIENT_MAX {
 		// structure.Source.Phase[uint(shardnum)] = 2 //切换到第二阶段：生成委员会阶段
 		logger.ShardLogger.Printf("执行分片%v切换到了生成委员会阶段", shardnum)
 		//根据Client提交的Random筛选出本执行分片中的胜利者，进入委员会
 		Win := client.Id
 		WinRandom := client.Random
 		WinClient := client
-		for key, value := range CommunicationMap[uint(shardnum)] {
+		for key, value := range Consensus_Map[uint(shardnum)] {
 			if value.Random < WinRandom {
 				Win = key
 				WinRandom = value.Random //选出Random最小的作为胜利者
@@ -132,24 +137,29 @@ func RegisterCommunication(c *gin.Context) {
 			}
 		}
 		//胜利者进入共识分片，先从执行分片中删除
-		delete(CommunicationMap[uint(shardnum)], Win)
+		delete(Consensus_Map[uint(shardnum)], Win)
 
-		if CommunicationMap[uint(0)] == nil {
-			CommunicationMap[uint(0)] = make(map[string]*structure.Client, structure.ShardNum)
+		if Consensus_Map[uint(0)] == nil {
+			Consensus_Map[uint(0)] = make(map[string]*structure.Client, structure.ShardNum)
 		}
 		//记录进分片0，即委员会
-		CommunicationMap[uint(0)][Win] = WinClient
-		logger.AnalysisLogger.Printf("map1:%v", structure.Source.CommunicationMap)
-		logger.AnalysisLogger.Printf("map2:%v", structure.Source.CommunicationMap_temp)
+		Consensus_Map[uint(0)][Win] = WinClient
+		// logger.AnalysisLogger.Printf("分片%v填满节点后consensus_map中的节点有:%v", shardnum, structure.Source.Consensus_CommunicationMap)
+		// logger.AnalysisLogger.Printf("分片%v填满节点后validation_map中的节点有:%v", shardnum, structure.Source.Validation_CommunicationMap)
+
+		if Validation_Map[uint(shardnum)] == nil {
+			Validation_Map[uint(shardnum)] = Consensus_Map[uint(shardnum)]
+		}
+
 		//若所有执行分片都选出了胜者，则在委员会中选出最终胜者
-		if len(CommunicationMap[uint(0)]) == structure.ShardNum {
+		if len(Consensus_Map[uint(0)]) == structure.ShardNum {
 			logger.ShardLogger.Printf("所有执行分片都选出了胜者，开始进行共识")
 
 			FinalWin := WinClient.Id
 			FinalRandom := WinClient.Random
 			var idlist []string
 
-			for key, value := range CommunicationMap[uint(0)] {
+			for key, value := range Consensus_Map[uint(0)] {
 				if value.Random < FinalRandom {
 					FinalWin = key
 					FinalRandom = value.Random //选出Random最小的作为胜利者
@@ -159,7 +169,7 @@ func RegisterCommunication(c *gin.Context) {
 			structure.Source.Winner[uint(0)] = FinalWin
 
 			//通知共识节点胜出者的身份
-			for key, value := range CommunicationMap[uint(0)] {
+			for key, value := range Consensus_Map[uint(0)] {
 				if key == FinalWin {
 					message := model.MessageIsWin{
 						IsWin:       true,
@@ -200,7 +210,7 @@ func RegisterCommunication(c *gin.Context) {
 			}
 			for i := 1; i <= structure.ShardNum; i++ {
 				//通知执行节点胜出者的身份
-				for key, value := range CommunicationMap[uint(i)] {
+				for key, value := range Consensus_Map[uint(i)] {
 					message := model.MessageIsWin{
 						IsWin:       false,
 						IsConsensus: false,
@@ -245,15 +255,15 @@ func MultiCastBlock(c *gin.Context) {
 		Message:     payload,
 	}
 
-	var CommunicationMap map[uint]map[string]*structure.Client
-	if len(structure.Source.CommunicationMap[uint(0)]) > len(structure.Source.CommunicationMap_temp[uint(0)]) {
-		CommunicationMap = structure.Source.CommunicationMap
-	} else {
-		CommunicationMap = structure.Source.CommunicationMap_temp
-	}
+	// var CommunicationMap map[uint]map[string]*structure.Client
+	// if len(structure.Source.CommunicationMap[uint(0)]) > len(structure.Source.CommunicationMap_temp[uint(0)]) {
+	// 	CommunicationMap = structure.Source.CommunicationMap
+	// } else {
+	// 	CommunicationMap = structure.Source.CommunicationMap_temp
+	// }
 
 	//向分片内部的成员转发数据，注意不用向自己转发！！！！！
-	for key, value := range CommunicationMap[uint(0)] {
+	for key, value := range structure.Source.Consensus_CommunicationMap[uint(0)] {
 		if key != data.Id {
 			value.Socket.WriteJSON(metaMessage)
 		}
@@ -291,14 +301,14 @@ func SendVote(c *gin.Context) {
 		Message:     payload,
 	}
 	//发送给共识分片中的获胜者
-	var CommunicationMap map[uint]map[string]*structure.Client
-	if len(structure.Source.CommunicationMap[uint(0)]) > len(structure.Source.CommunicationMap_temp[uint(0)]) {
-		CommunicationMap = structure.Source.CommunicationMap
-	} else {
-		CommunicationMap = structure.Source.CommunicationMap_temp
-	}
+	// var CommunicationMap map[uint]map[string]*structure.Client
+	// if len(structure.Source.CommunicationMap[uint(0)]) > len(structure.Source.CommunicationMap_temp[uint(0)]) {
+	// 	CommunicationMap = structure.Source.CommunicationMap
+	// } else {
+	// 	CommunicationMap = structure.Source.CommunicationMap_temp
+	// }
 
-	CommunicationMap[uint(0)][target].Socket.WriteJSON(metaMessage)
+	structure.Source.Consensus_CommunicationMap[uint(0)][target].Socket.WriteJSON(metaMessage)
 
 	res := model.SendVoteResponse{
 		Message: "Group multicast Vote succeed",

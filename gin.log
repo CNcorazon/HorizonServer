@@ -20,3 +20,5 @@
 Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
 [GIN-debug] Environment variable PORT is undefined. Using port :8080 by default
 [GIN-debug] Listening and serving HTTP on :8080
+[GIN] 2022/05/30 - 13:09:39 | 200 |     154.733µs |       127.0.0.1 | GET      "/shard/shardNum"
+[GIN] 2022/05/30 - 13:09:39 | 200 |     188.092µs |       127.0.0.1 | GET      "/shard/register/1/6599235544460167489"
