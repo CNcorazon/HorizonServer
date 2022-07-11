@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"encoding/json"
+	"log"
 	"math"
 	"net/http"
 	"server/logger"
@@ -9,6 +11,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// const (
+// 	HTTPURL = "http://:8080"
+// 	WSURL   = "ws://43.154.59.82:8080"
+
+// 	packTransaction = "/pool/transaction"
+// )
 
 func PackTransaction(c *gin.Context) {
 	var data model.BlockTransactionRequest
@@ -26,6 +35,7 @@ func PackTransaction(c *gin.Context) {
 	CroList := make(map[uint][]structure.CrossShardTransaction)
 	ReList := make(map[uint][]structure.SuperTransaction)
 	var Num int
+
 	if shard == 0 {
 		//若是共识节点请求打包交易，则从各分片中的见证池中打包交易
 		for i := 1; i <= structure.ShardNum; i++ {
@@ -36,15 +46,6 @@ func PackTransaction(c *gin.Context) {
 			Num = Num + num
 		}
 		logger.AnalysisLogger.Printf("共识节点打包了%v条交易", Num)
-		// res := model.BlockTransactionResponse{
-		// 	Shard:          shard,
-		// 	Height:         structure.Source.ChainShard[shard].GetHeight() + 1,
-		// 	Num:            Num,
-		// 	InternalList:   IntList,
-		// 	CrossShardList: CroList,
-		// 	RelayList:      ReList,
-		// }
-		// c.JSON(200, res)
 	} else {
 		//若是执行请求打包交易（区块见证），则从交易池中取出一些交易
 		for i := 1; i <= structure.ShardNum; i++ {
@@ -54,48 +55,30 @@ func PackTransaction(c *gin.Context) {
 			ReList[uint(i)] = append(ReList[uint(i)], Re...)
 			Num = Num + num
 		}
-		// logger.AnalysisLogger.Printf("移动节点下载了%v条交易", Num)
+		logger.AnalysisLogger.Printf("执行节点打包了%v条交易", Num)
+	}
 
-		// 	Num = 50
-		// 	croRate := 1.0 //跨分片交易占据总交易的1/croRate
-
-		// 	if structure.ShardNum == 1 {
-		// 		//如果只有一个分片，则只需要制作内部交易
-		// 		addressList := structure.Source.AddressLsistMap[uint(1)]
-		// 		for j := 0; j < Num; j++ {
-		// 			Value := 1
-		// 			IntList[uint(1)] = append(IntList[uint(1)], structure.MakeInternalTransaction(1, addressList[0], addressList[1], Value))
-		// 			// structure.Source.PoolMap[1].AppendInternalTransaction(trans)
-		// 		}
-		// 	} else {
-		// 		//如果有多个分片
-		// 		//先制作一些内部交易
-		// 		intTranNum := Num - int((float64(Num) * croRate))
-		// 		addressList := structure.Source.AddressLsistMap[shard]
-		// 		for j := 0; j < (intTranNum / structure.ShardNum); j++ {
-		// 			Value := 1
-		// 			IntList[uint(shard)] = append(IntList[shard], structure.MakeInternalTransaction(shard, addressList[0], addressList[1], Value))
-		// 			// structure.Source.PoolMap[uint(i)].AppendInternalTransaction(trans)
-		// 		}
-
-		// 		//再制作一些跨分片交易
-		// 		croTranNum := int((float64(Num) * croRate))
-
-		// 		from := int(shard)
-		// 		target := int(shard) + 1
-		// 		if int(shard) == structure.ShardNum {
-		// 			target = 1
-		// 		}
-		// 		addressList1 := structure.Source.AddressLsistMap[uint(from)]
-		// 		addressList2 := structure.Source.AddressLsistMap[uint(target)]
-		// 		for i := 0; i < (croTranNum / structure.ShardNum); i++ {
-		// 			Value := 1
-		// 			CroList[shard] = append(CroList[shard], structure.MakeCrossShardTransaction(uint(from), uint(target), addressList1[0], addressList2[0], Value))
-		// 			// structure.Source.PoolMap[uint(from)].AppendCrossShardTransaction(trans)
-		// 		}
-		// 	}
+	data1 := model.SynTxpoolRequest{
+		Shard_id: shard,
+		Height:   height,
+	}
+	payload, err := json.Marshal(data1)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	metaMessage := model.MessageMetaData{
+		MessageType: 5,
+		Message:     payload,
+	}
+	for _, value := range structure.Source.Server_CommunicationMap {
+		value.Socket.WriteJSON(metaMessage)
+	}
+	for _, key := range structure.Source.Server_CommunicationMap {
+		key.Socket.WriteJSON(metaMessage)
 	}
 	structure.Source.Lock.Unlock()
+
 	res := model.BlockTransactionResponse{
 		Shard:          shard,
 		Height:         structure.Source.ChainShard[uint(0)].GetHeight() + 1,
@@ -143,6 +126,20 @@ func AppendBlock(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	//将该block发送给其他服务器，更新区块链
+	payload, err := json.Marshal(data)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	metamessage := model.MessageMetaData{
+		MessageType: 6,
+		Message:     payload,
+	}
+	for _, value := range structure.Source.Server_CommunicationMap {
+		value.Socket.WriteJSON(metamessage)
+	}
+
 	structure.Source.Lock.Lock()
 	//首先检测发来区块的人的ID是否符合
 	if data.Id != structure.Source.Winner[uint(0)] {
@@ -155,8 +152,8 @@ func AppendBlock(c *gin.Context) {
 	}
 	//检测这个ChainBlock是否合理，如果合理就Append到链上
 	//Shard == 0
-	err := structure.Source.ChainShard[0].VerifyBlock(data.Block)
-	if err != nil {
+	err1 := structure.Source.ChainShard[0].VerifyBlock(data.Block)
+	if err1 != nil {
 		logger.ShardLogger.Printf("共识分片中共识区块%v添加失败,将所有的交易放回共识区块的交易池中", data.Block.Header.Height)
 		for i := 1; i < len(data.Block.Body.Transaction.InternalList); i++ {
 			for _, tran := range data.Block.Body.Transaction.InternalList[uint(i)] {
@@ -210,7 +207,9 @@ func AppendBlock(c *gin.Context) {
 	// }
 	//将共识分片中的客户端全部关掉
 	for _, value := range structure.Source.Consensus_CommunicationMap[uint(0)] {
-		value.Socket.Close()
+		if value.Socket != nil {
+			value.Socket.Close()
+		}
 	}
 	// CommunicationMap[uint(0)] = nil
 	//开始重分片
@@ -291,8 +290,32 @@ func WitnessTx(c *gin.Context) {
 		}
 		// logger.AnalysisLogger.Printf("见证成功%v条交易", Num)
 		structure.Source.WitnessCount = -100000 //保证后面提交的交易不被重复记录
+		payload, err := json.Marshal(data)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		metamessage := model.MessageMetaData{
+			MessageType: 7,
+			Message:     payload,
+		}
+		for _, value := range structure.Source.Server_CommunicationMap {
+			value.Socket.WriteJSON(metamessage)
+		}
+	} else {
+		payload, err := json.Marshal(data)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		metamessage := model.MessageMetaData{
+			MessageType: 7,
+			Message:     payload,
+		}
+		for _, value := range structure.Source.Server_CommunicationMap {
+			value.Socket.WriteJSON(metamessage)
+		}
 	}
-
 	structure.Source.Lock.Unlock()
 	res := model.TxWitnessResponse_2{
 		Message: "见证成功!",
@@ -354,6 +377,19 @@ func CollectRoot(c *gin.Context) {
 
 	structure.Source.Lock.Lock()
 
+	payload, err := json.Marshal(data)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	metamessage := model.MessageMetaData{
+		MessageType: 8,
+		Message:     payload,
+	}
+	for _, value := range structure.Source.Server_CommunicationMap {
+		value.Socket.WriteJSON(metamessage)
+	}
+
 	structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard][root] += 1
 	logger.AnalysisLogger.Printf("收到来自shard%v的树根,该分片的树根以及票数情况为:votes%v", shard, structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard])
 	var CommunicationMap map[uint]map[string]*structure.Client
@@ -366,7 +402,9 @@ func CollectRoot(c *gin.Context) {
 	// }
 
 	// logger.AnalysisLogger.Printf("collectroot:%v,%v,%v", CommunicationMap, shard, id)
-	CommunicationMap[shard][id].Socket.Close()
+	if CommunicationMap[shard][id].Socket != nil {
+		CommunicationMap[shard][id].Socket.Close()
+	}
 	CommunicationMap[shard][id] = nil
 	for _, client := range CommunicationMap[shard] {
 		if client != nil {

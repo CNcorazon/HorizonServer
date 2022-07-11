@@ -15,6 +15,5 @@ func ShardRoute(r *gin.Engine) {
 		// group.GET("/phase/:shardnum", controller.GetPhase)
 		group.POST("/block", controller.MultiCastBlock)
 		group.POST("/vote", controller.SendVote)
-
 	}
 }

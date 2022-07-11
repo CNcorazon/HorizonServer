@@ -1,12 +1,16 @@
 package structure
 
 import (
+	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"log"
 	"math"
+	"os"
 	"server/logger"
+	"strings"
 
 	"github.com/pochard/commons/randstr"
 )
@@ -194,8 +198,28 @@ func GenerateKey() string {
 
 func GenerateAddressList(n int) []string {
 	set := make(map[string]struct{})
+
+	// 创建句柄
+	fi, err := os.Open("address.txt")
+	if err != nil {
+		panic(err)
+	}
+
+	// 创建 Reader
+	r := bufio.NewReader(fi)
+
 	for len(set) < n {
-		key := GenerateKey()
+		line, err := r.ReadString('\n')
+		line = strings.TrimSpace(line)
+		if err != nil && err != io.EOF {
+			panic(err)
+		}
+		if err == io.EOF {
+			break
+		}
+		// fmt.Println(line)
+
+		key := line
 		set[key] = struct{}{}
 	}
 	var res []string

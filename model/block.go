@@ -27,6 +27,7 @@ type (
 		GSRoot      structure.GSRoot
 	}
 
+	//MessageType = 6
 	BlockUploadRequest struct {
 		// Shard     uint
 		Id        string
@@ -54,6 +55,7 @@ type (
 		RelayList      map[uint][]structure.SuperTransaction
 	}
 
+	//MessageType = 7
 	TxWitnessRequest_2 struct {
 		Shard          uint
 		Height         uint
@@ -67,6 +69,7 @@ type (
 		Message string
 	}
 
+	//MessageType = 8
 	RootUploadRequest struct {
 		Shard  uint
 		Height uint

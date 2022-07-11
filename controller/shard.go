@@ -14,14 +14,16 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+const (
+	WsRequest     = "/forward/wsRequest"
+	ClientForward = "/forward/clientRegister "
+)
+
 //给发起请求的客户端分配分片的ID
 func AssignShardNum(c *gin.Context) {
 	structure.Source.Lock.Lock()
 	defer structure.Source.Lock.Unlock()
 	num := 0 //如果发送的时候为0说明执行分片已经有了足够多的节点
-	// shardList := make([]uint, structure.ShardNum) //候选Shard
-	// var tranNum []int    //交易数目
-	// logger.AnalysisLogger.Printf("%v", structure.Source.NodeNum)
 
 	for i := 1; i <= int(structure.Source.Shard); i++ {
 		if structure.Source.NodeNum[uint(i)] == structure.CLIENT_MAX {
@@ -29,30 +31,29 @@ func AssignShardNum(c *gin.Context) {
 		} else {
 			num = i
 			structure.Source.NodeNum[uint(i)] += 1
+			//直接转发给其他服务器
+			//只考虑理想情况，固定数量的移动节点
+			//会不会出现，服务器之间来不及同步的情况呢？
+			for _, value := range structure.Source.Server_CommunicationMap {
+				message := model.ReshardNodeNumRequest{
+					Shard_id: uint(i),
+					Nodenum:  structure.Source.NodeNum,
+				}
+				payload, err := json.Marshal(message)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+				metamessage := model.MessageMetaData{
+					MessageType: 4,
+					Message:     payload,
+				}
+				value.Socket.WriteJSON(metamessage)
+			}
 			break
 		}
 	}
-	// for i := 1; i <= int(structure.Source.Shard); i++ {
-	// 	// log.Printf("查看分片%v的当前阶段", i)
-	// 	if structure.Source.Phase[uint(i)] == 1 {
-	// 		shardList = append(shardList, uint(i))
-	// 		tranNum = append(tranNum, structure.Source.PoolMap[uint(i)].GetTransactionNum())
-	// 	}
-	// }
-	// if len(tranNum) == 0 {
-	// 	num = 0
-	// } else {
-	// 	maxValue := tranNum[0]
-	// 	maxIndex := 0
-	// 	for i := 1; i < len(tranNum); i++ {
-	// 		if maxValue < tranNum[i] {
-	// 			maxValue = tranNum[i]
-	// 			maxIndex = i
-	// 		}
-	// 	}
-	// 	//最后获取到ShardNum
-	// 	num = int(shardList[maxIndex])
-	// }
+
 	logger.ShardLogger.Printf("该移动节点被分配到了%v分片", num)
 
 	res := model.ShardNumResponse{
@@ -103,15 +104,6 @@ func RegisterCommunication(c *gin.Context) {
 
 	Consensus_Map := structure.Source.Consensus_CommunicationMap
 	Validation_Map := structure.Source.Validation_CommunicationMap
-	// if len(structure.Source.CommunicationMap[uint(0)]) == structure.ShardNum {
-	// 	CommunicationMap = structure.Source.CommunicationMap_temp
-	// } else if len(structure.Source.CommunicationMap_temp[uint(0)]) == structure.ShardNum {
-	// 	CommunicationMap = structure.Source.CommunicationMap
-	// } else if len(structure.Source.CommunicationMap_temp[uint(0)]) == 0 {
-	// 	CommunicationMap = structure.Source.CommunicationMap
-	// } else {
-	// 	CommunicationMap = structure.Source.CommunicationMap_temp
-	// }
 
 	if Consensus_Map[uint(shardnum)] == nil {
 		Consensus_Map[uint(shardnum)] = make(map[string]*structure.Client)
@@ -120,8 +112,34 @@ func RegisterCommunication(c *gin.Context) {
 	Consensus_Map[uint(shardnum)][client.Id] = client
 	logger.ShardLogger.Printf("分片%v添加一个新的移动节点,当前分片的移动节点数为%v", shardnum, len(Consensus_Map[uint(shardnum)]))
 
-	//如果该执行分片达到了足够多的移动节点数目,从该执行分片中选出胜者加入共识分片，shard[0]
+	//将该节点信息转发给其他服务器
+	message := model.ClientForwardRequest{
+		Id:    client.Id,
+		Shard: client.Shard,
+		// Socket: client.Socket,
+		Random: client.Random,
+	}
 
+	payload, err := json.Marshal(message)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	metamessage := model.MessageMetaData{
+		MessageType: 1,
+		Message:     payload,
+	}
+
+	for _, value := range structure.Source.Server_CommunicationMap {
+		value.Socket.WriteJSON(metamessage)
+	}
+
+	// res1 := request.ClientRegister(structure.Server1, ClientForward, message)
+	// res2 := request.ClientRegister(structure.Server2, ClientForward, message)
+	// res3 := request.ClientRegister(structure.Server3, ClientForward, message)
+	// fmt.Println(res1, res2, res3)
+
+	//如果该执行分片达到了足够多的移动节点数目,从该执行分片中选出胜者加入共识分片，shard[0]
 	if len(Consensus_Map[uint(shardnum)]) == structure.CLIENT_MAX {
 		// structure.Source.Phase[uint(shardnum)] = 2 //切换到第二阶段：生成委员会阶段
 		logger.ShardLogger.Printf("执行分片%v切换到了生成委员会阶段", shardnum)
@@ -170,6 +188,9 @@ func RegisterCommunication(c *gin.Context) {
 
 			//通知共识节点胜出者的身份
 			for key, value := range Consensus_Map[uint(0)] {
+				if value.Socket == nil {
+					continue
+				}
 				if key == FinalWin {
 					message := model.MessageIsWin{
 						IsWin:       true,
@@ -211,6 +232,9 @@ func RegisterCommunication(c *gin.Context) {
 			for i := 1; i <= structure.ShardNum; i++ {
 				//通知执行节点胜出者的身份
 				for key, value := range Consensus_Map[uint(i)] {
+					if value.Socket == nil {
+						continue
+					}
 					message := model.MessageIsWin{
 						IsWin:       false,
 						IsConsensus: false,
@@ -262,12 +286,17 @@ func MultiCastBlock(c *gin.Context) {
 	// 	CommunicationMap = structure.Source.CommunicationMap_temp
 	// }
 
-	//向分片内部的成员转发数据，注意不用向自己转发！！！！！
+	//向连接在该服务器的委员会成员转发数据，注意不用向自己转发！！！！！
 	for key, value := range structure.Source.Consensus_CommunicationMap[uint(0)] {
-		if key != data.Id {
+		if key != data.Id && value.Socket != nil {
 			value.Socket.WriteJSON(metaMessage)
 		}
 	}
+	//向连接在其他服务器的委员会成员转发数据
+	for _, value := range structure.Source.Server_CommunicationMap {
+		value.Socket.WriteJSON(metaMessage)
+	}
+
 	res := model.MultiCastBlockResponse{
 		Message: "Group multicast block succeed",
 	}
@@ -300,15 +329,14 @@ func SendVote(c *gin.Context) {
 		MessageType: 3,
 		Message:     payload,
 	}
-	//发送给共识分片中的获胜者
-	// var CommunicationMap map[uint]map[string]*structure.Client
-	// if len(structure.Source.CommunicationMap[uint(0)]) > len(structure.Source.CommunicationMap_temp[uint(0)]) {
-	// 	CommunicationMap = structure.Source.CommunicationMap
-	// } else {
-	// 	CommunicationMap = structure.Source.CommunicationMap_temp
-	// }
 
-	structure.Source.Consensus_CommunicationMap[uint(0)][target].Socket.WriteJSON(metaMessage)
+	if structure.Source.Consensus_CommunicationMap[uint(0)][target].Socket != nil {
+		structure.Source.Consensus_CommunicationMap[uint(0)][target].Socket.WriteJSON(metaMessage)
+	} else {
+		for _, value := range structure.Source.Server_CommunicationMap {
+			value.Socket.WriteJSON(metaMessage)
+		}
+	}
 
 	res := model.SendVoteResponse{
 		Message: "Group multicast Vote succeed",

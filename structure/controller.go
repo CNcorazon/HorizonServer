@@ -12,12 +12,14 @@ type (
 		Lock                        sync.Mutex
 		Shard                       uint                        //Controller控制的总Shard数目
 		NodeNum                     map[uint]int                //重分片时记录各分片已有节点数量
+		ClientNum                   map[uint]int                //选出leader时记录各分片的节点数量
 		Winner                      map[uint]string             //记录共识分片每一轮的胜利者
 		ChainShard                  map[uint]*HorizonBlockChain //链信息
 		Consensus_CommunicationMap  map[uint]map[string]*Client //共识的map
 		Validation_CommunicationMap map[uint]map[string]*Client //验证的map
-		PoolMap                     map[uint]map[uint]*Pool     //各分片各阶段的交易池
-		WitnessCount                int                         //统计收到的区块见证数量
+		Server_CommunicationMap     map[string]*Server
+		PoolMap                     map[uint]map[uint]*Pool //各分片各阶段的交易池
+		WitnessCount                int                     //统计收到的区块见证数量
 		AddressLsistMap             map[uint][]string
 	}
 
@@ -26,6 +28,11 @@ type (
 		Shard  uint   //该客户端被划归的分片名称
 		Socket *websocket.Conn
 		Random int //用户提交的随机数，用来选取共识协议最初的胜利者
+	}
+
+	Server struct {
+		Ip     string
+		Socket *websocket.Conn
 	}
 )
 
@@ -37,10 +44,12 @@ func InitController(shardNum int, accountNum int) *Controller {
 		Lock:                        sync.Mutex{},
 		Shard:                       uint(shardNum),
 		NodeNum:                     make(map[uint]int),
+		ClientNum:                   make(map[uint]int),
 		Winner:                      make(map[uint]string, 1),
 		ChainShard:                  make(map[uint]*HorizonBlockChain, 1),
 		Consensus_CommunicationMap:  make(map[uint]map[string]*Client),
 		Validation_CommunicationMap: make(map[uint]map[string]*Client),
+		Server_CommunicationMap:     make(map[string]*Server),
 		// ShardMap:         make(map[uint]*ExecuteShard, shardNum),
 		PoolMap: make(map[uint]map[uint]*Pool),
 		// PoolMap1:        make(map[uint]*Pool, shardNum),
