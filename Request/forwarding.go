@@ -13,15 +13,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func WSRequest(wsurl string, route string) (*websocket.Conn, bool) {
+func WSRequest(wsurl string, route string, ip string) (*websocket.Conn, bool) {
 	rand.Seed(time.Now().UnixNano())
-	URL := wsurl + route
+	URL := wsurl + route + "/" + ip
 	var dialer *websocket.Dialer
 	conn, _, err := dialer.Dial(URL, nil)
 	if err != nil {
-		log.Println("WS连接已经断开,等待服务器开始")
+		log.Printf("WS连接已经断开,等待服务器开始")
 		return nil, false
 	}
+	log.Printf("WS连接成功")
 	return conn, true
 }
 

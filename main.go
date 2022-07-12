@@ -50,6 +50,7 @@ import (
 
 // }
 const (
+	WSURL1    = "ws://172.17.0.2:8080"
 	WsRequest = "/forward/wsRequest"
 	// ClientForward = "/forward/clientRegister "
 )
@@ -63,26 +64,24 @@ func main() {
 
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
-	r := route.InitRoute()
-	r.Run()
-
 	var comm1 *websocket.Conn
-
-	for {
-		conn1, flag := request.WSRequest(structure.Server1, WsRequest)
-		if !flag {
-			log.Printf("服务器尚未开启")
-			time.Sleep(5 * time.Second)
-		} else {
-			comm1 = conn1
-			break
-		}
-	}
-	// conn2 := request.WSRequest(structure.Server2, WsRequest)
-	// conn3 := request.WSRequest(structure.Server3, WsRequest)
-
 	go func() {
 		for {
+			log.Printf("im here 1")
+			conn1, flag := request.WSRequest(WSURL1, WsRequest, structure.Server1)
+			if !flag {
+				log.Printf("服务器尚未开启")
+			} else {
+				comm1 = conn1
+				break
+			}
+		}
+		log.Printf("im here 1.5")
+		// conn2 := request.WSRequest(structure.Server2, WsRequest)
+		// conn3 := request.WSRequest(structure.Server3, WsRequest)
+
+		for {
+			log.Printf("im here 2")
 			var metamessage model.MessageMetaData
 			comm1.ReadJSON(&metamessage)
 			//判断收到的消息的类型
@@ -476,6 +475,7 @@ func main() {
 
 	go func() {
 		for {
+			log.Printf("im here 3")
 			time.Sleep(5 * time.Second)
 			structure.Source.ChainShard[uint(0)].AccountState.LogState(structure.Source.ChainShard[uint(0)].GetHeight())
 			for i := 1; i <= structure.ShardNum; i++ {
@@ -485,5 +485,7 @@ func main() {
 			}
 		}
 	}()
-
+	r := route.InitRoute()
+	log.Printf("im here 4")
+	r.Run()
 }

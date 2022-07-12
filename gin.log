@@ -4,3 +4,20 @@
  - using env:	export GIN_MODE=release
  - using code:	gin.SetMode(gin.ReleaseMode)
 
+[GIN-debug] POST   /block/transaction        --> server/controller.PackTransaction (3 handlers)
+[GIN-debug] POST   /block/account            --> server/controller.PackAccount (3 handlers)
+[GIN-debug] POST   /block/upload             --> server/controller.AppendBlock (3 handlers)
+[GIN-debug] POST   /block/witness            --> server/controller.PackTransaction (3 handlers)
+[GIN-debug] POST   /block/witness_2          --> server/controller.WitnessTx (3 handlers)
+[GIN-debug] POST   /block/validate           --> server/controller.PackValidTx (3 handlers)
+[GIN-debug] POST   /block/uploadroot         --> server/controller.CollectRoot (3 handlers)
+[GIN-debug] GET    /shard/shardNum           --> server/controller.AssignShardNum (3 handlers)
+[GIN-debug] GET    /shard/height             --> server/controller.GetHeight (3 handlers)
+[GIN-debug] GET    /shard/register/:shardnum/:random --> server/controller.RegisterCommunication (3 handlers)
+[GIN-debug] POST   /shard/block              --> server/controller.MultiCastBlock (3 handlers)
+[GIN-debug] POST   /shard/vote               --> server/controller.SendVote (3 handlers)
+[GIN-debug] GET    /Forward/wsRequest/:ip    --> server/controller.ServerRegisterCommunication (3 handlers)
+[GIN-debug] [WARNING] You trusted all proxies, this is NOT safe. We recommend you to set a value.
+Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-proxies for details.
+[GIN-debug] Environment variable PORT is undefined. Using port :8080 by default
+[GIN-debug] Listening and serving HTTP on :8080
