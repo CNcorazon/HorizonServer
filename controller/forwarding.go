@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"server/logger"
@@ -12,7 +13,7 @@ import (
 
 func ServerRegisterCommunication(c *gin.Context) {
 	ip := c.Param("ip")
-
+	fmt.Println("im here")
 	//将http请求升级成为WebSocket请求
 	upGrader := websocket.Upgrader{
 		// cross origin domain

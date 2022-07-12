@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 // func GetLocalIP() []string {
@@ -62,14 +63,28 @@ func main() {
 
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
-	conn1 := request.WSRequest(structure.Server1, WsRequest)
+	r := route.InitRoute()
+	r.Run()
+
+	var comm1 *websocket.Conn
+
+	for {
+		conn1, flag := request.WSRequest(structure.Server1, WsRequest)
+		if !flag {
+			log.Printf("服务器尚未开启")
+			time.Sleep(5 * time.Second)
+		} else {
+			comm1 = conn1
+			break
+		}
+	}
 	// conn2 := request.WSRequest(structure.Server2, WsRequest)
 	// conn3 := request.WSRequest(structure.Server3, WsRequest)
 
 	go func() {
 		for {
 			var metamessage model.MessageMetaData
-			conn1.ReadJSON(&metamessage)
+			comm1.ReadJSON(&metamessage)
 			//判断收到的消息的类型
 			switch metamessage.MessageType {
 			//在服务器之间同步各分片内委员会成员的信息
@@ -443,7 +458,6 @@ func main() {
 			}
 		}
 	}()
-
 	// go func() {
 	// 	for {
 	// 		var metamessage model.MessageMetaData
@@ -471,6 +485,5 @@ func main() {
 			}
 		}
 	}()
-	r := route.InitRoute()
-	r.Run()
+
 }

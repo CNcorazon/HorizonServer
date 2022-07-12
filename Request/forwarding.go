@@ -13,16 +13,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func WSRequest(wsurl string, route string) *websocket.Conn {
+func WSRequest(wsurl string, route string) (*websocket.Conn, bool) {
 	rand.Seed(time.Now().UnixNano())
 	URL := wsurl + route
 	var dialer *websocket.Dialer
 	conn, _, err := dialer.Dial(URL, nil)
 	if err != nil {
-		log.Println(err)
-		return nil
+		log.Println("WS连接已经断开,等待服务器开始")
+		return nil, false
 	}
-	return conn
+	return conn, true
 }
 
 func ClientRegister(httpurl string, route string, clientdata model.ClientForwardRequest) model.ClientForwardResponse {
