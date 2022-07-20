@@ -7,7 +7,7 @@ import (
 )
 
 func ForwardRoute(r *gin.Engine) {
-	group := r.Group("/Forward")
+	group := r.Group("/forward")
 	{
 		group.GET("/wsRequest/:ip", controller.ServerRegisterCommunication)
 		// group.POST("/register", controller.ForwardRegisterCommunication)

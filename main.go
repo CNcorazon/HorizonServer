@@ -50,7 +50,7 @@ import (
 
 // }
 const (
-	WSURL1    = "ws://172.17.0.2:8080"
+	WSURL1    = "ws://192.168.199.151:8080"
 	WsRequest = "/forward/wsRequest"
 	// ClientForward = "/forward/clientRegister "
 )
@@ -76,7 +76,7 @@ func main() {
 				break
 			}
 		}
-		log.Printf("im here 1.5")
+		// log.Printf("im here 1.5")
 		// conn2 := request.WSRequest(structure.Server2, WsRequest)
 		// conn3 := request.WSRequest(structure.Server3, WsRequest)
 
@@ -88,6 +88,7 @@ func main() {
 			switch metamessage.MessageType {
 			//在服务器之间同步各分片内委员会成员的信息
 			case 1:
+				log.Printf("im here 2.1")
 				var data model.ClientForwardRequest
 				err := json.Unmarshal(metamessage.Message, &data)
 				if err != nil {
@@ -95,7 +96,6 @@ func main() {
 					return
 				}
 				structure.Source.Lock.Lock()
-				defer structure.Source.Lock.Unlock()
 
 				//尝试添加节点
 				client := &structure.Client{
@@ -235,8 +235,10 @@ func main() {
 						}
 					}
 				}
+				structure.Source.Lock.Unlock()
 			//在服务器之间同步leader提出的区块并发送给各自的移动节点
 			case 2:
+				log.Printf("im here 2.2")
 				for _, value := range structure.Source.Consensus_CommunicationMap[uint(0)] {
 					if value.Socket != nil {
 						value.Socket.WriteJSON(metamessage)
@@ -244,6 +246,7 @@ func main() {
 				}
 			//在服务器之间同步委员会成员的投票信息并发送给各自的移动节点
 			case 3:
+				log.Printf("im here 2.3")
 				var vote model.SendVoteRequest
 				err := json.Unmarshal(metamessage.Message, &vote)
 				if err != nil {
@@ -256,18 +259,24 @@ func main() {
 				}
 			//在服务器之间同步重分片时各个分片的节点数量
 			case 4:
+				log.Printf("im here 2.4")
 				var shardmsg model.ReshardNodeNumRequest
 				err := json.Unmarshal(metamessage.Message, &shardmsg)
 				if err != nil {
 					log.Printf("err")
 					return
 				}
+				log.Printf("im here 2.4.1")
 				structure.Source.Lock.Lock()
+				log.Printf("im here 2.4.2")
 				shard_id := shardmsg.Shard_id
 				structure.Source.NodeNum[shard_id] += 1
+
 				structure.Source.Lock.Unlock()
+				log.Printf("im here 2.4.3")
 			//在服务器之间同步交易池，直接取出相应数量的交易
 			case 5:
+				log.Printf("im here 2.5")
 				var syntxpool model.SynTxpoolRequest
 				err := json.Unmarshal(metamessage.Message, &syntxpool)
 				if err != nil {
@@ -292,6 +301,7 @@ func main() {
 				structure.Source.Lock.Unlock()
 			//在服务器之间同步新上链的区块
 			case 6:
+				log.Printf("im here 2.6")
 				var data model.BlockUploadRequest
 				err := json.Unmarshal(metamessage.Message, &data)
 				if err != nil {
@@ -374,6 +384,7 @@ func main() {
 				structure.Source.Lock.Unlock()
 			//在服务器之间同步区块见证
 			case 7:
+				log.Printf("im here 2.7")
 				var data model.TxWitnessRequest_2
 				err := json.Unmarshal(metamessage.Message, &data)
 				if err != nil {
@@ -405,6 +416,7 @@ func main() {
 				structure.Source.Lock.Unlock()
 			//在服务器之间同步对树根的签名，并判断是否收到了/*所有人*/的投票（可能会有问题）
 			case 8:
+				log.Printf("im here 2.8")
 				var data model.RootUploadRequest
 				err := json.Unmarshal(metamessage.Message, &data)
 				if err != nil {
@@ -423,6 +435,9 @@ func main() {
 				isEmpty := true
 				isEnd := true
 				CommunicationMap = structure.Source.Validation_CommunicationMap
+
+				log.Println(CommunicationMap)
+				log.Println(shard, id)
 
 				if CommunicationMap[shard][id].Socket != nil {
 					CommunicationMap[shard][id].Socket.Close()
@@ -475,7 +490,7 @@ func main() {
 
 	go func() {
 		for {
-			log.Printf("im here 3")
+			// log.Printf("im here 3")
 			time.Sleep(5 * time.Second)
 			structure.Source.ChainShard[uint(0)].AccountState.LogState(structure.Source.ChainShard[uint(0)].GetHeight())
 			for i := 1; i <= structure.ShardNum; i++ {

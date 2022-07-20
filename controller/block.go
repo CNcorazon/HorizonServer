@@ -72,11 +72,10 @@ func PackTransaction(c *gin.Context) {
 		Message:     payload,
 	}
 	for _, value := range structure.Source.Server_CommunicationMap {
+		logger.AnalysisLogger.Printf("交易池服务器同步")
 		value.Socket.WriteJSON(metaMessage)
 	}
-	for _, key := range structure.Source.Server_CommunicationMap {
-		key.Socket.WriteJSON(metaMessage)
-	}
+
 	structure.Source.Lock.Unlock()
 
 	res := model.BlockTransactionResponse{
@@ -137,7 +136,9 @@ func AppendBlock(c *gin.Context) {
 		Message:     payload,
 	}
 	for _, value := range structure.Source.Server_CommunicationMap {
+		value.Lock.Lock()
 		value.Socket.WriteJSON(metamessage)
+		value.Lock.Unlock()
 	}
 
 	structure.Source.Lock.Lock()
@@ -300,7 +301,9 @@ func WitnessTx(c *gin.Context) {
 			Message:     payload,
 		}
 		for _, value := range structure.Source.Server_CommunicationMap {
+			value.Lock.Lock()
 			value.Socket.WriteJSON(metamessage)
+			value.Lock.Unlock()
 		}
 	} else {
 		payload, err := json.Marshal(data)
@@ -313,7 +316,9 @@ func WitnessTx(c *gin.Context) {
 			Message:     payload,
 		}
 		for _, value := range structure.Source.Server_CommunicationMap {
+			value.Lock.Lock()
 			value.Socket.WriteJSON(metamessage)
+			value.Lock.Unlock()
 		}
 	}
 	structure.Source.Lock.Unlock()
@@ -387,7 +392,9 @@ func CollectRoot(c *gin.Context) {
 		Message:     payload,
 	}
 	for _, value := range structure.Source.Server_CommunicationMap {
+		value.Lock.Lock()
 		value.Socket.WriteJSON(metamessage)
+		value.Lock.Unlock()
 	}
 
 	structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard][root] += 1
@@ -402,6 +409,7 @@ func CollectRoot(c *gin.Context) {
 	// }
 
 	// logger.AnalysisLogger.Printf("collectroot:%v,%v,%v", CommunicationMap, shard, id)
+
 	if CommunicationMap[shard][id].Socket != nil {
 		CommunicationMap[shard][id].Socket.Close()
 	}

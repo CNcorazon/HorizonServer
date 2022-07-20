@@ -48,7 +48,9 @@ func AssignShardNum(c *gin.Context) {
 					MessageType: 4,
 					Message:     payload,
 				}
+				value.Lock.Lock()
 				value.Socket.WriteJSON(metamessage)
+				value.Lock.Unlock()
 			}
 			break
 		}
@@ -131,7 +133,9 @@ func RegisterCommunication(c *gin.Context) {
 	}
 
 	for _, value := range structure.Source.Server_CommunicationMap {
+		value.Lock.Lock()
 		value.Socket.WriteJSON(metamessage)
+		value.Lock.Unlock()
 	}
 
 	// res1 := request.ClientRegister(structure.Server1, ClientForward, message)

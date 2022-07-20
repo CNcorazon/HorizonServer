@@ -1,13 +1,13 @@
 package structure
 
 const (
-	ShardNum         = 4
+	ShardNum         = 2
 	AccountNum       = 2
 	CLIENT_MAX       = 3
 	SIGN_VERIFY_TIME = 4    //millisecond
 	TX_NUM           = 3000 //per shard per catagory
 
-	Server1 = "172.17.0.2"
+	Server1 = "192.168.199.151"
 	Server2 = "172.168.66.14"
 	Server3 = "172.168.66.14"
 )

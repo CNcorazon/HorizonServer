@@ -33,6 +33,7 @@ type (
 	Server struct {
 		Ip     string
 		Socket *websocket.Conn
+		Lock   sync.RWMutex
 	}
 )
 

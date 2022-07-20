@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"server/logger"
 	"server/structure"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -43,6 +44,7 @@ func ServerRegisterCommunication(c *gin.Context) {
 	server := &structure.Server{
 		Ip:     ip,
 		Socket: conn,
+		Lock:   sync.RWMutex{},
 	}
 
 	// logger.AnalysisLogger.Printf("consensus_map:%v", structure.Source.Consensus_CommunicationMap)
