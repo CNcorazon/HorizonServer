@@ -10,8 +10,9 @@ type (
 
 	//MessageType = 5
 	SynTxpoolRequest struct {
-		Shard_id uint
-		Height   uint
+		Shard_id    uint
+		Height      uint
+		PackValidTx bool
 	}
 
 	//不同的移动节点连接不同的服务器，服务器之间需要同步移动节点信息（给移动节点发送信息还是各自的服务器发送

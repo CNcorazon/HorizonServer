@@ -290,9 +290,9 @@ func VerifyGSRoot(vote map[uint]map[string]int, s *State) {
 	MinVote := math.Max(1, math.Floor(2*CLIENT_MAX/3))
 	isValid := false
 	for i := 1; i <= ShardNum; i++ {
-		logger.AnalysisLogger.Printf("分片%v中收到的树根结果为%v", i, vote[uint(i)])
-		logger.AnalysisLogger.Printf("分片%v的Rootsvote为%v", i, s.RootsVote[uint(i)])
-		logger.AnalysisLogger.Printf("分片%v的NewRootsvote为%v", i, s.NewRootsVote[uint(i)])
+		// logger.AnalysisLogger.Printf("分片%v中收到的树根结果为%v", i, vote[uint(i)])
+		// logger.AnalysisLogger.Printf("分片%v的Rootsvote为%v", i, s.RootsVote[uint(i)])
+		// logger.AnalysisLogger.Printf("分片%v的NewRootsvote为%v", i, s.NewRootsVote[uint(i)])
 		for _, votes := range vote[uint(i)] {
 			if votes >= int(MinVote) {
 				isValid = true

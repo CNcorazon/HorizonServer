@@ -81,14 +81,14 @@ func main() {
 		// conn3 := request.WSRequest(structure.Server3, WsRequest)
 
 		for {
-			log.Printf("im here 2")
+			// log.Printf("im here 2")
 			var metamessage model.MessageMetaData
 			comm1.ReadJSON(&metamessage)
 			//判断收到的消息的类型
 			switch metamessage.MessageType {
 			//在服务器之间同步各分片内委员会成员的信息
 			case 1:
-				log.Printf("im here 2.1")
+				logger.AnalysisLogger.Printf("im here 2.1")
 				var data model.ClientForwardRequest
 				err := json.Unmarshal(metamessage.Message, &data)
 				if err != nil {
@@ -105,8 +105,8 @@ func main() {
 					Random: data.Random,
 				}
 				shardnum := data.Shard
-				// logger.AnalysisLogger.Printf("consensus_map:%v", structure.Source.Consensus_CommunicationMap)
-				// logger.AnalysisLogger.Printf("validation_map:%v", structure.Source.Validation_CommunicationMap)
+				logger.AnalysisLogger.Printf("forwarding:consensus_map:%v", structure.Source.Consensus_CommunicationMap)
+				logger.AnalysisLogger.Printf("forwarding:validation_map:%v", structure.Source.Validation_CommunicationMap)
 
 				Consensus_Map := structure.Source.Consensus_CommunicationMap
 				Validation_Map := structure.Source.Validation_CommunicationMap
@@ -116,12 +116,12 @@ func main() {
 				}
 
 				Consensus_Map[uint(shardnum)][client.Id] = client
-				logger.ShardLogger.Printf("分片%v添加一个新的移动节点,当前分片的移动节点数为%v", shardnum, len(Consensus_Map[uint(shardnum)]))
+				logger.ShardLogger.Printf("forwarding:分片%v添加一个新的移动节点,当前分片的移动节点数为%v", shardnum, len(Consensus_Map[uint(shardnum)]))
 
 				//如果该执行分片达到了足够多的移动节点数目,从该执行分片中选出胜者加入共识分片，shard[0]
 				if len(Consensus_Map[uint(shardnum)]) == structure.CLIENT_MAX {
 					// structure.Source.Phase[uint(shardnum)] = 2 //切换到第二阶段：生成委员会阶段
-					logger.ShardLogger.Printf("执行分片%v切换到了生成委员会阶段", shardnum)
+					logger.ShardLogger.Printf("forwarding:执行分片%v切换到了生成委员会阶段", shardnum)
 					//根据Client提交的Random筛选出本执行分片中的胜利者，进入委员会
 					Win := client.Id
 					WinRandom := client.Random
@@ -141,8 +141,8 @@ func main() {
 					}
 					//记录进分片0，即委员会
 					Consensus_Map[uint(0)][Win] = WinClient
-					// logger.AnalysisLogger.Printf("分片%v填满节点后consensus_map中的节点有:%v", shardnum, structure.Source.Consensus_CommunicationMap)
-					// logger.AnalysisLogger.Printf("分片%v填满节点后validation_map中的节点有:%v", shardnum, structure.Source.Validation_CommunicationMap)
+					logger.AnalysisLogger.Printf("forwarding:分片%v填满节点后consensus_map中的节点有:%v", shardnum, structure.Source.Consensus_CommunicationMap)
+					logger.AnalysisLogger.Printf("forwarding:分片%v填满节点后validation_map中的节点有:%v", shardnum, structure.Source.Validation_CommunicationMap)
 
 					if Validation_Map[uint(shardnum)] == nil {
 						Validation_Map[uint(shardnum)] = Consensus_Map[uint(shardnum)]
@@ -150,8 +150,7 @@ func main() {
 
 					//若所有执行分片都选出了胜者，则在委员会中选出最终胜者
 					if len(Consensus_Map[uint(0)]) == structure.ShardNum {
-						logger.ShardLogger.Printf("所有执行分片都选出了胜者，开始进行共识")
-
+						logger.ShardLogger.Printf("forwarding:所有执行分片都选出了胜者，开始进行共识")
 						FinalWin := WinClient.Id
 						FinalRandom := WinClient.Random
 						var idlist []string
@@ -238,45 +237,48 @@ func main() {
 				structure.Source.Lock.Unlock()
 			//在服务器之间同步leader提出的区块并发送给各自的移动节点
 			case 2:
-				log.Printf("im here 2.2")
+				logger.AnalysisLogger.Printf("im here 2.2")
 				for _, value := range structure.Source.Consensus_CommunicationMap[uint(0)] {
 					if value.Socket != nil {
+						logger.AnalysisLogger.Printf("forwarding:将区块发送给委员会成员")
 						value.Socket.WriteJSON(metamessage)
 					}
 				}
 			//在服务器之间同步委员会成员的投票信息并发送给各自的移动节点
 			case 3:
-				log.Printf("im here 2.3")
+				logger.AnalysisLogger.Printf("im here 2.3")
 				var vote model.SendVoteRequest
 				err := json.Unmarshal(metamessage.Message, &vote)
 				if err != nil {
 					log.Println(err)
 					return
 				}
+				structure.Source.Lock.Lock()
 				target := vote.WinID
 				if structure.Source.Consensus_CommunicationMap[uint(0)][target].Socket != nil {
 					structure.Source.Consensus_CommunicationMap[uint(0)][target].Socket.WriteJSON(metamessage)
 				}
+				logger.AnalysisLogger.Printf("forwarding:将共识投票结果发送给leader")
+				structure.Source.Lock.Unlock()
 			//在服务器之间同步重分片时各个分片的节点数量
 			case 4:
-				log.Printf("im here 2.4")
+				logger.AnalysisLogger.Printf("im here 2.4")
 				var shardmsg model.ReshardNodeNumRequest
 				err := json.Unmarshal(metamessage.Message, &shardmsg)
 				if err != nil {
 					log.Printf("err")
 					return
 				}
-				log.Printf("im here 2.4.1")
+				// log.Printf("im here 2.4.1")
 				structure.Source.Lock.Lock()
-				log.Printf("im here 2.4.2")
+				// log.Printf("im here 2.4.2")
 				shard_id := shardmsg.Shard_id
 				structure.Source.NodeNum[shard_id] += 1
-
+				logger.AnalysisLogger.Printf("forwarding:同步重分片各个分片的数量,此时各个分片的节点数量为%v", structure.Source.NodeNum)
 				structure.Source.Lock.Unlock()
-				log.Printf("im here 2.4.3")
 			//在服务器之间同步交易池，直接取出相应数量的交易
 			case 5:
-				log.Printf("im here 2.5")
+				logger.AnalysisLogger.Printf("im here 2.5")
 				var syntxpool model.SynTxpoolRequest
 				err := json.Unmarshal(metamessage.Message, &syntxpool)
 				if err != nil {
@@ -290,18 +292,24 @@ func main() {
 						_, _, _, num := structure.Source.PoolMap[uint(1)][uint(i)].PackTransactionList(int(syntxpool.Height)+1, structure.TX_NUM, structure.TX_NUM, structure.TX_NUM)
 						Num = Num + num
 					}
-					logger.AnalysisLogger.Printf("共识节点打包了%v条交易", Num)
-				} else {
+					logger.AnalysisLogger.Printf("forwarding:共识节点共识阶段打包了%v条交易", Num)
+				} else if !syntxpool.PackValidTx {
 					for i := 1; i <= structure.ShardNum; i++ {
 						_, _, _, num := structure.Source.PoolMap[uint(0)][uint(i)].PackTransactionList(int(syntxpool.Height)+1, structure.TX_NUM, structure.TX_NUM, structure.TX_NUM)
 						Num = Num + num
 					}
-					logger.AnalysisLogger.Printf("执行节点打包了%v条交易", Num)
+					logger.AnalysisLogger.Printf("forwarding:执行节点区块见证阶段打包了%v条交易", Num)
+				} else {
+					for i := 1; i <= structure.ShardNum; i++ {
+						_, _, _, num := structure.Source.PoolMap[uint(2)][uint(i)].PackTransactionList(int(syntxpool.Height)+1, structure.TX_NUM, structure.TX_NUM, structure.TX_NUM)
+						Num = Num + num
+					}
+					logger.AnalysisLogger.Printf("forwarding:执行节点验证阶段打包了%v条交易", Num)
 				}
 				structure.Source.Lock.Unlock()
 			//在服务器之间同步新上链的区块
 			case 6:
-				log.Printf("im here 2.6")
+				logger.AnalysisLogger.Printf("im here 2.6")
 				var data model.BlockUploadRequest
 				err := json.Unmarshal(metamessage.Message, &data)
 				if err != nil {
@@ -317,7 +325,7 @@ func main() {
 				//Shard == 0
 				err1 := structure.Source.ChainShard[0].VerifyBlock(data.Block)
 				if err1 != nil {
-					logger.ShardLogger.Printf("共识分片中共识区块%v添加失败,将所有的交易放回共识区块的交易池中", data.Block.Header.Height)
+					logger.ShardLogger.Printf("forwarding:共识分片中共识区块%v添加失败,将所有的交易放回共识区块的交易池中", data.Block.Header.Height)
 					for i := 1; i < len(data.Block.Body.Transaction.InternalList); i++ {
 						for _, tran := range data.Block.Body.Transaction.InternalList[uint(i)] {
 							structure.Source.PoolMap[uint(1)][uint(i)].InternalChannel <- tran
@@ -335,9 +343,9 @@ func main() {
 					}
 				} else {
 					//添加区块
-					logger.ShardLogger.Printf("共识分片共识区块%v添加成功，将交易区块放入执行区块的交易池中", data.Block.Header.Height)
+					logger.ShardLogger.Printf("forwarding:共识分片共识区块%v添加成功，将交易区块放入执行区块的交易池中", data.Block.Header.Height)
 					structure.Source.ChainShard[0].AppendBlock(data.Block)
-					logger.AnalysisLogger.Printf("共识分片共识区块%v添加成功，将交易区块放入执行区块的交易池中", data.Block.Header.Height)
+					logger.AnalysisLogger.Printf("forwarding:共识分片共识区块%v添加成功，将交易区块放入执行区块的交易池中", data.Block.Header.Height)
 					for i := 1; i < len(data.Block.Body.Transaction.InternalList); i++ {
 						for _, tran := range data.Block.Body.Transaction.InternalList[uint(i)] {
 							structure.Source.PoolMap[uint(2)][uint(i)].InternalChannel <- tran
@@ -380,11 +388,11 @@ func main() {
 				}
 				//将Winner清空
 				structure.Source.Winner[uint(0)] = ""
-				logger.ShardLogger.Printf("重新开始筛选节点,清空上一分片节点相关信息")
+				logger.ShardLogger.Printf("forwarding:重新开始筛选节点,清空上一分片节点相关信息")
 				structure.Source.Lock.Unlock()
 			//在服务器之间同步区块见证
 			case 7:
-				log.Printf("im here 2.7")
+				logger.AnalysisLogger.Printf("im here 2.7")
 				var data model.TxWitnessRequest_2
 				err := json.Unmarshal(metamessage.Message, &data)
 				if err != nil {
@@ -395,7 +403,7 @@ func main() {
 				//统计收到的见证数量
 				structure.Source.WitnessCount += 1
 				var Num int
-				// logger.AnalysisLogger.Printf("区块见证的数量为：%v", structure.Source.WitnessCount)
+				logger.AnalysisLogger.Printf("forwarding:区块见证的数量为：%v", structure.Source.WitnessCount)
 				MinVote := math.Max(1, math.Floor(2*structure.CLIENT_MAX/3))
 				if structure.Source.WitnessCount >= int(MinVote) {
 					for i := 1; i <= structure.ShardNum; i++ {
@@ -410,13 +418,13 @@ func main() {
 							structure.Source.PoolMap[uint(1)][uint(i)].AppendRelayTransaction(trans)
 						}
 					}
-					// logger.AnalysisLogger.Printf("见证成功%v条交易", Num)
+					logger.AnalysisLogger.Printf("forwarding:见证成功%v条交易", Num)
 					structure.Source.WitnessCount = -100000 //保证后面提交的交易不被重复记录
 				}
 				structure.Source.Lock.Unlock()
 			//在服务器之间同步对树根的签名，并判断是否收到了/*所有人*/的投票（可能会有问题）
 			case 8:
-				log.Printf("im here 2.8")
+				logger.AnalysisLogger.Printf("im here 2.8")
 				var data model.RootUploadRequest
 				err := json.Unmarshal(metamessage.Message, &data)
 				if err != nil {
@@ -430,14 +438,15 @@ func main() {
 
 				structure.Source.Lock.Lock()
 				structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard][root] += 1
-				logger.AnalysisLogger.Printf("收到来自shard%v的树根,该分片的树根以及票数情况为:votes%v", shard, structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard])
+				logger.AnalysisLogger.Printf("forwarding:收到来自shard%v的树根,该分片的树根以及票数情况为:votes%v", shard, structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard])
 				var CommunicationMap map[uint]map[string]*structure.Client
 				isEmpty := true
 				isEnd := true
 				CommunicationMap = structure.Source.Validation_CommunicationMap
 
-				log.Println(CommunicationMap)
-				log.Println(shard, id)
+				// log.Println("验证", CommunicationMap)
+				// log.Println("共识", structure.Source.Consensus_CommunicationMap)
+				// log.Println(shard, id)
 
 				if CommunicationMap[shard][id].Socket != nil {
 					CommunicationMap[shard][id].Socket.Close()

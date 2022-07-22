@@ -59,8 +59,9 @@ func PackTransaction(c *gin.Context) {
 	}
 
 	data1 := model.SynTxpoolRequest{
-		Shard_id: shard,
-		Height:   height,
+		Shard_id:    shard,
+		Height:      height,
+		PackValidTx: false,
 	}
 	payload, err := json.Marshal(data1)
 	if err != nil {
@@ -72,7 +73,7 @@ func PackTransaction(c *gin.Context) {
 		Message:     payload,
 	}
 	for _, value := range structure.Source.Server_CommunicationMap {
-		logger.AnalysisLogger.Printf("交易池服务器同步")
+		// logger.AnalysisLogger.Printf("交易池服务器同步")
 		value.Socket.WriteJSON(metaMessage)
 	}
 
@@ -104,7 +105,7 @@ func PackAccount(c *gin.Context) {
 		StateRoot: structure.Source.ChainShard[0].AccountState.CalculateRoot(),
 		Vote:      structure.Source.ChainShard[0].AccountState.RootsVote,
 	}
-	logger.AnalysisLogger.Printf("来自分片%v的gsroot请求,此时rootsvote为:%v", shard, structure.Source.ChainShard[0].AccountState.RootsVote)
+	// logger.AnalysisLogger.Printf("来自分片%v的gsroot请求,此时rootsvote为:%v", shard, structure.Source.ChainShard[0].AccountState.RootsVote)
 	height := structure.Source.ChainShard[0].GetHeight()
 
 	res := model.BlockAccountResponse{
@@ -219,6 +220,9 @@ func AppendBlock(c *gin.Context) {
 		structure.Source.NodeNum[uint(i)] = 0
 		// structure.Source.Consensus_CommunicationMap[uint(i)] = nil
 	}
+
+	// logger.AnalysisLogger.Println("区块上链时共识:", structure.Source.Consensus_CommunicationMap)
+
 	for i := 0; i <= structure.ShardNum; i++ {
 		structure.Source.Consensus_CommunicationMap[uint(i)] = nil
 	}
@@ -274,7 +278,7 @@ func WitnessTx(c *gin.Context) {
 	structure.Source.WitnessCount += 1
 
 	var Num int
-	// logger.AnalysisLogger.Printf("区块见证的数量为：%v", structure.Source.WitnessCount)
+	logger.AnalysisLogger.Printf("区块见证的数量为：%v", structure.Source.WitnessCount)
 	MinVote := math.Max(1, math.Floor(2*structure.CLIENT_MAX/3))
 	if structure.Source.WitnessCount >= int(MinVote) {
 		for i := 1; i <= structure.ShardNum; i++ {
@@ -289,7 +293,7 @@ func WitnessTx(c *gin.Context) {
 				structure.Source.PoolMap[uint(1)][uint(i)].AppendRelayTransaction(trans)
 			}
 		}
-		// logger.AnalysisLogger.Printf("见证成功%v条交易", Num)
+		logger.AnalysisLogger.Printf("见证成功%v条交易", Num)
 		structure.Source.WitnessCount = -100000 //保证后面提交的交易不被重复记录
 		payload, err := json.Marshal(data)
 		if err != nil {
@@ -353,8 +357,27 @@ func PackValidTx(c *gin.Context) {
 		Num = Num + num
 	}
 
+	data1 := model.SynTxpoolRequest{
+		Shard_id:    shard,
+		Height:      height,
+		PackValidTx: true,
+	}
+	payload, err := json.Marshal(data1)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	metaMessage := model.MessageMetaData{
+		MessageType: 5,
+		Message:     payload,
+	}
+	for _, value := range structure.Source.Server_CommunicationMap {
+		// logger.AnalysisLogger.Printf("交易池服务器同步")
+		value.Socket.WriteJSON(metaMessage)
+	}
+
 	structure.Source.Lock.Unlock()
-	// logger.AnalysisLogger.Printf("执行节点验证阶段打包了%v条交易", Num)
+	logger.AnalysisLogger.Printf("执行节点验证阶段打包了%v条交易", Num)
 	res := model.BlockTransactionResponse{
 		Shard:          shard,
 		Height:         structure.Source.ChainShard[uint(0)].GetHeight() + 1,
@@ -398,7 +421,7 @@ func CollectRoot(c *gin.Context) {
 	}
 
 	structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard][root] += 1
-	logger.AnalysisLogger.Printf("收到来自shard%v的树根,该分片的树根以及票数情况为:votes%v", shard, structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard])
+	logger.AnalysisLogger.Printf("收到来自shard%v的树根投票,该分片的树根以及票数情况为:votes%v", shard, structure.Source.ChainShard[uint(0)].AccountState.NewRootsVote[shard])
 	var CommunicationMap map[uint]map[string]*structure.Client
 	isEmpty := true
 	isEnd := true
@@ -409,6 +432,10 @@ func CollectRoot(c *gin.Context) {
 	// }
 
 	// logger.AnalysisLogger.Printf("collectroot:%v,%v,%v", CommunicationMap, shard, id)
+
+	// logger.AnalysisLogger.Println("GSROOT时验证", CommunicationMap)
+	// logger.AnalysisLogger.Println("GSROOT时共识", structure.Source.Consensus_CommunicationMap)
+	// logger.AnalysisLogger.Printf("GSROOT时收到的来自%v分片的%v的投票", shard, id)
 
 	if CommunicationMap[shard][id].Socket != nil {
 		CommunicationMap[shard][id].Socket.Close()

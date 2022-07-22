@@ -31,6 +31,7 @@ func AssignShardNum(c *gin.Context) {
 		} else {
 			num = i
 			structure.Source.NodeNum[uint(i)] += 1
+			logger.AnalysisLogger.Printf("同步重分片各个分片的数量,此时各个分片的节点数量为%v", structure.Source.NodeNum)
 			//直接转发给其他服务器
 			//只考虑理想情况，固定数量的移动节点
 			//会不会出现，服务器之间来不及同步的情况呢？
@@ -101,8 +102,8 @@ func RegisterCommunication(c *gin.Context) {
 		Random: random,
 	}
 
-	// logger.AnalysisLogger.Printf("consensus_map:%v", structure.Source.Consensus_CommunicationMap)
-	// logger.AnalysisLogger.Printf("validation_map:%v", structure.Source.Validation_CommunicationMap)
+	logger.AnalysisLogger.Printf("consensus_map:%v", structure.Source.Consensus_CommunicationMap)
+	logger.AnalysisLogger.Printf("validation_map:%v", structure.Source.Validation_CommunicationMap)
 
 	Consensus_Map := structure.Source.Consensus_CommunicationMap
 	Validation_Map := structure.Source.Validation_CommunicationMap
@@ -142,7 +143,7 @@ func RegisterCommunication(c *gin.Context) {
 	// res2 := request.ClientRegister(structure.Server2, ClientForward, message)
 	// res3 := request.ClientRegister(structure.Server3, ClientForward, message)
 	// fmt.Println(res1, res2, res3)
-
+	// logger.AnalysisLogger.Printf("%v进入分片之后共识:%v", client.Id, Consensus_Map)
 	//如果该执行分片达到了足够多的移动节点数目,从该执行分片中选出胜者加入共识分片，shard[0]
 	if len(Consensus_Map[uint(shardnum)]) == structure.CLIENT_MAX {
 		// structure.Source.Phase[uint(shardnum)] = 2 //切换到第二阶段：生成委员会阶段
@@ -166,8 +167,8 @@ func RegisterCommunication(c *gin.Context) {
 		}
 		//记录进分片0，即委员会
 		Consensus_Map[uint(0)][Win] = WinClient
-		// logger.AnalysisLogger.Printf("分片%v填满节点后consensus_map中的节点有:%v", shardnum, structure.Source.Consensus_CommunicationMap)
-		// logger.AnalysisLogger.Printf("分片%v填满节点后validation_map中的节点有:%v", shardnum, structure.Source.Validation_CommunicationMap)
+		logger.AnalysisLogger.Printf("分片%v填满节点后consensus_map中的节点有:%v", shardnum, structure.Source.Consensus_CommunicationMap)
+		logger.AnalysisLogger.Printf("分片%v填满节点后validation_map中的节点有:%v", shardnum, structure.Source.Validation_CommunicationMap)
 
 		if Validation_Map[uint(shardnum)] == nil {
 			Validation_Map[uint(shardnum)] = Consensus_Map[uint(shardnum)]
@@ -293,6 +294,7 @@ func MultiCastBlock(c *gin.Context) {
 	//向连接在该服务器的委员会成员转发数据，注意不用向自己转发！！！！！
 	for key, value := range structure.Source.Consensus_CommunicationMap[uint(0)] {
 		if key != data.Id && value.Socket != nil {
+			logger.AnalysisLogger.Printf("将区块发送给委员会成员")
 			value.Socket.WriteJSON(metaMessage)
 		}
 	}
@@ -336,6 +338,7 @@ func SendVote(c *gin.Context) {
 
 	if structure.Source.Consensus_CommunicationMap[uint(0)][target].Socket != nil {
 		structure.Source.Consensus_CommunicationMap[uint(0)][target].Socket.WriteJSON(metaMessage)
+		logger.AnalysisLogger.Printf("将共识投票结果发送给leader")
 	} else {
 		for _, value := range structure.Source.Server_CommunicationMap {
 			value.Socket.WriteJSON(metaMessage)
